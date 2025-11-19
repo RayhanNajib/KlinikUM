@@ -21,40 +21,45 @@ class ProfileController extends Controller
     }
 
     public function update(Request $request)
-    {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
+{
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
 
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
-            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
 
-
-        if ($request->hasFile('avatar')) {
-            
-          
-            $path = 'avatars/';
-            
-            if ($user->avatar && $user->avatar != 'default.png') {
-                Storage::disk('public')->delete($path . $user->avatar);
-            }
-
-            $file = $request->file('avatar');
-            $filename = $user->id . '-' . time() . '.' . $file->getClientOriginalExtension();
-            
-            $file->storeAs($path, $filename, 'public');
-
-            $user->avatar = $filename;
-        }
+    if ($request->hasFile('avatar')) {
         
-        $user->name = $request->name;
-        $user->email = $request->email;
-        $user->save();
+        // 1. DEFINISIKAN PATH DENGAN JELAS (Tanpa slash di akhir)
+        $folderPath = 'avatars'; 
+        
+        // 2. Hapus foto lama jika ada (dan bukan default)
+        if ($user->avatar && $user->avatar != 'default.png') {
+            // Cek dulu apakah file ada biar tidak error
+            if (Storage::disk('public')->exists($folderPath . '/' . $user->avatar)) {
+                Storage::disk('public')->delete($folderPath . '/' . $user->avatar);
+            }
+        }
 
-        return redirect()->route('profile.edit')->with('success', 'Profil berhasil diperbarui!');
+        $file = $request->file('avatar');
+        $filename = $user->id . '-' . time() . '.' . $file->getClientOriginalExtension();
+        
+        // 3. SIMPAN (Gunakan $folderPath yang sudah pasti terisi)
+        // storeAs akan otomatis menggabungkan path + filename
+        $file->storeAs($folderPath, $filename, 'public');
+
+        $user->avatar = $filename;
     }
+    
+    $user->name = $request->name;
+    $user->email = $request->email;
+    $user->save();
+
+    return redirect()->route('profile.edit')->with('success', 'Profil berhasil diperbarui!');
+}
 
 
     public function updatePassword(Request $request)
