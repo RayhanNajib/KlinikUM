@@ -5,34 +5,32 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ChartController;
 
-
+// Import Controller Role
 use App\Http\Controllers\Admin\DoctorController as AdminDoctorController;
 use App\Http\Controllers\Admin\ScheduleController as AdminScheduleController;
 use App\Http\Controllers\Admin\PatientController as AdminPatientController;
+use App\Http\Controllers\Admin\PaymentController as AdminPaymentController; 
+
 use App\Http\Controllers\Doctor\ScheduleController as DoctorScheduleController;
 use App\Http\Controllers\Doctor\AppointmentController as DoctorAppointmentController;
+use App\Http\Controllers\Doctor\CertificateController as DoctorCertificateController; 
+
 use App\Http\Controllers\Patient\JadwalController as PatientJadwalController;
 use App\Http\Controllers\Patient\AppointmentController as PatientAppointmentController;
-
-
-use App\Http\Controllers\ChartController;
-
 
 /*
 |--------------------------------------------------------------------------
 | Rute Publik & Autentikasi
 |--------------------------------------------------------------------------
 */
-
-
 Route::get('/', function () {
     if (Auth::check()) {
         return redirect()->route('dashboard');
     }
     return redirect()->route('login');
 })->name('home');
-
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -47,90 +45,84 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
-    
-
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    
-
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     
-
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
-    Route::get('/chart-data', [ChartController::class, 'getChartData'])
-         ->name('api.chart.data'); 
-
+    Route::get('/chart-data', [ChartController::class, 'getChartData'])->name('api.chart.data'); 
 });
 
 /*
 |--------------------------------------------------------------------------
-| Rute Khusus ADMIN (Dilindungi Middleware)
+| Rute ADMIN (Hanya Pantau & Manajemen User)
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function () {
-    
     Route::resource('jadwal', AdminScheduleController::class);
+    Route::delete('jadwal/destroy-all-empty', [AdminScheduleController::class, 'destroyAllEmpty'])->name('jadwal.destroyAllEmpty');
     Route::resource('dokter', AdminDoctorController::class);
     Route::resource('pasien', AdminPatientController::class);
 
-
-    Route::delete('jadwal/destroy-all-empty', [AdminScheduleController::class, 'destroyAllEmpty'])
-         ->name('jadwal.destroyAllEmpty');
-
+    // Admin hanya MEMANTAU pembayaran (Tidak ada create/store)
+    Route::get('pembayaran', [AdminPaymentController::class, 'index'])->name('payment.index');
+    Route::get('pembayaran/{payment}/print', [AdminPaymentController::class, 'show'])->name('payment.show');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Rute Khusus DOKTER (Dilindungi Middleware)
+| Rute DOKTER (Input Diagnosa & Biaya)
 |--------------------------------------------------------------------------
 */
 Route::prefix('dokter')->name('dokter.')->middleware(['auth', 'role:doctor'])->group(function () {
     
-    Route::get('jadwal-saya', [DoctorScheduleController::class, 'index'])
-         ->name('jadwal.index');
-         
-    Route::get('pasien-saya', [DoctorAppointmentController::class, 'index'])
-         ->name('appointment.index');
-         
-    Route::patch('pasien-saya/{appointment}/complete', [DoctorAppointmentController::class, 'complete'])
-         ->name('appointment.complete');
+    Route::get('jadwal-saya', [DoctorScheduleController::class, 'index'])->name('jadwal.index');
+    Route::get('pasien-saya', [DoctorAppointmentController::class, 'index'])->name('appointment.index');
+    
+    Route::post('pasien-saya/{appointment}/process', [DoctorAppointmentController::class, 'processAndBill'])
+         ->name('appointment.process');
+
+    Route::get('surat/{appointment}/create', [DoctorCertificateController::class, 'create'])->name('certificate.create');
+    Route::post('surat/{appointment}', [DoctorCertificateController::class, 'store'])->name('certificate.store');
+    Route::get('surat/{certificate}/print', [DoctorCertificateController::class, 'print'])->name('certificate.print');
+
+    // --- TAMBAHAN BARU DI SINI ---
+    // Kita "pinjam" controller AdminPaymentController fungsi show, tapi kita beri akses ke Dokter
+    Route::get('pembayaran/{payment}/print', [AdminPaymentController::class, 'show'])->name('payment.print');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Rute Khusus PASIEN (Dilindungi Middleware)
+| Rute PASIEN
 |--------------------------------------------------------------------------
 */
 Route::prefix('pasien')->name('pasien.')->middleware(['auth', 'role:patient'])->group(function () {
-    
-    Route::get('jadwal', [PatientJadwalController::class, 'index'])
-         ->name('jadwal.index');
-
-    Route::get('jadwal/{schedule}/book', [PatientJadwalController::class, 'showBookingForm'])
-         ->name('jadwal.book.show');
-         
-    Route::post('jadwal/{schedule}/book', [PatientJadwalController::class, 'storeBooking'])
-         ->name('jadwal.book.store');
-
-    Route::get('janji-temu', [PatientAppointmentController::class, 'index'])
-         ->name('appointment.index');
-         
-    Route::delete('janji-temu/{appointment}', [PatientAppointmentController::class, 'cancel'])
-         ->name('appointment.cancel');
+    Route::get('jadwal', [PatientJadwalController::class, 'index'])->name('jadwal.index');
+    Route::get('jadwal/{schedule}/book', [PatientJadwalController::class, 'showBookingForm'])->name('jadwal.book.show');
+    Route::post('jadwal/{schedule}/book', [PatientJadwalController::class, 'storeBooking'])->name('jadwal.book.store');
+    Route::get('janji-temu', [PatientAppointmentController::class, 'index'])->name('appointment.index');
+    Route::delete('janji-temu/{appointment}', [PatientAppointmentController::class, 'cancel'])->name('appointment.cancel');
 });
+
 
 /*
 |--------------------------------------------------------------------------
-| Rute Khusus ADMIN (Dilindungi Middleware)
+| Rute ADMIN
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function () {
-    
+    // ... (Resource lain tetap sama)
     Route::resource('jadwal', AdminScheduleController::class);
+    Route::delete('jadwal/destroy-all-empty', [AdminScheduleController::class, 'destroyAllEmpty'])->name('jadwal.destroyAllEmpty');
     Route::resource('dokter', AdminDoctorController::class);
-    
     Route::resource('pasien', AdminPatientController::class);
 
+    // UPDATE BAGIAN INI:
+    Route::get('pembayaran', [AdminPaymentController::class, 'index'])->name('payment.index');
+    Route::get('pembayaran/{payment}/print', [AdminPaymentController::class, 'show'])->name('payment.show');
+    
+    // TAMBAHAN BARU: Rute untuk ACC Pembayaran (Kasir)
+    Route::patch('pembayaran/{payment}/lunas', [AdminPaymentController::class, 'markAsPaid'])->name('payment.lunas');
 });

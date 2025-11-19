@@ -13,4 +13,13 @@ class Appointment extends Model {
     public function schedule() {
         return $this->belongsTo(Schedule::class);
     }
+    public function payment()
+    {
+        return $this->hasOne(Payment::class);
+    }
+
+    public function medicalCertificate()
+    {
+        return $this->hasOne(MedicalCertificate::class);
+    }
 }
